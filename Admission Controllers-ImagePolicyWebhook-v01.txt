@@ -1,0 +1,194 @@
+
+```raw
+# Kubernetes CKA Lab: Admission Controllers — ImagePolicyWebhook
+
+## Overview
+This document contains the complete configuration, lab steps, and questions for the **Admission Controllers** lab focusing on the `ImagePolicyWebhook` admission plugin.
+
+---
+
+## Lab Questions & Task Breakdown
+
+### Question 1 of 8: Introduction
+* **Context**: The `ImagePolicyWebhook` admission controller intercepts pod creation requests and consults an external webhook service to determine whether the container images specified in the pod spec should be allowed or denied.
+* **Webhook Endpoint**: `https://image-checker-webhook.default.svc:1323/image_policy`
+* **Configuration Directory**: `/etc/kubernetes/imgvalidation`
+
+### Question 2 of 8: Primary Purpose
+* **Question**: What is the primary purpose of the `ImagePolicyWebhook` admission controller?
+* **Options**:
+  * Encrypt container images at rest in the container registry
+  * Automatically scan images for vulnerabilities after pods are deployed
+  * **Validate container images against an external webhook before allowing pod creation** *(Correct Answer)*
+  * Authenticate users trying to pull container images
+
+### Question 3 of 8: Examine Incomplete Configuration
+* **Directory**: `/etc/kubernetes/imgvalidation/`
+* **Files Present**:
+  1. `admission-configuration.yaml` — The `AdmissionConfiguration` resource that references the `ImagePolicyWebhook` config (incomplete).
+  2. `imagepolicy-conf.yaml` — The `ImagePolicyWebhook` plugin configuration (incomplete).
+  3. `kubeconf.yaml` — The kubeconfig file used by the API server to connect to the webhook (incomplete).
+  4. `webhook.crt` — The TLS certificate for the webhook server.
+* **Inspection Commands**:
+  ```bash
+  cd /etc/kubernetes/imgvalidation
+  ls -la
+
+```
+
+### Question 4 of 8: `defaultAllow` Meaning
+
+* **Question**: In the `ImagePolicyWebhook` configuration, the `defaultAllow` field is currently set to `true`. What does this mean when the webhook backend is unavailable?
+* **Options**:
+* **All pod creation requests are allowed (fail-open)** *(Correct Answer)*
+* Only pods in the default namespace are allowed
+* The API server retries indefinitely until the backend responds
+* All pod creation requests are denied (fail-closed)
+
+
+
+### Question 5 of 8: Task - Configure Fail-Closed
+
+* **Task**: Reconfigure the `ImagePolicyWebhook` to reject images when the webhook backend is unavailable (`fail-closed`). Change `defaultAllow: true` to `defaultAllow: false` in `imagepolicy-conf.yaml`.
+
+### Question 6 of 8: Task - Configure Kubeconfig Endpoint
+
+* **Task**: Update the `server` field under `clusters[0].cluster` in `/etc/kubernetes/imgvalidation/kubeconf.yaml` to point to the image scanner webhook endpoint:
+`https://image-checker-webhook.default.svc:1323/image_policy`
+
+### Question 7 of 8: Task - Enable Admission Plugin on API Server
+
+* **Task**: Reconfigure the API server manifest (`/etc/kubernetes/manifests/kube-apiserver.yaml`) to:
+* Enable the `ImagePolicyWebhook` admission plugin.
+* Set `--admission-control-config-file=/etc/kubernetes/imgvalidation/admission-configuration.yaml`.
+* Mount the `/etc/kubernetes/imgvalidation` directory as a volume inside the static pod.
+
+
+
+### Question 8 of 8: Task - Verify and Test Deployment
+
+* **Task**: Deploy the test resource defined in `~/test-deploy.yaml` to verify that the `ImagePolicyWebhook` is working correctly.
+* **Expected Result**: The pod should be **denied** by the webhook because the image violates the image policy.
+* **Command**:
+```bash
+kubectl apply -f ~/test-deploy.yaml
+
+```
+
+
+
+---
+
+## Lab Configuration Files
+
+### 1. Admission Configuration (`admission-configuration.yaml`)
+
+```yaml
+apiVersion: apiserver.config.k8s.io/v1
+kind: AdmissionConfiguration
+plugins:
+- name: ImagePolicyWebhook
+  path: /etc/kubernetes/imgvalidation/imagepolicy-conf.yaml
+
+```
+
+### 2. Image Policy Configuration (`imagepolicy-conf.yaml`)
+
+```yaml
+imagePolicy:
+  kubeConfigFile: /etc/kubernetes/imgvalidation/kubeconf.yaml
+  allowTTL: 50
+  denyTTL: 50
+  retryBackoff: 500
+  defaultAllow: true
+
+```
+
+### 3. Webhook Kubeconfig (`kubeconf.yaml`)
+
+```yaml
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority: /etc/kubernetes/imgvalidation/webhook.crt
+    server: [https://placeholder.example.com](https://placeholder.example.com)
+  name: checker_webhook
+contexts:
+- context:
+    cluster: checker_webhook
+    user: api-server
+  name: checker_validator
+current-context: checker_validator
+preferences: {}
+users:
+- name: api-server
+  user:
+    client-certificate: /etc/kubernetes/pki/front-proxy-client.crt
+    client-key: /etc/kubernetes/pki/front-proxy-client.key
+
+```
+
+### 4. Webhook Certificate (`webhook.crt`)
+
+```cert
+-----BEGIN CERTIFICATE-----
+MIIDNTCCAh2gAwIBAgIUP+XV4nvLDiXwnHKlhn7T/2o9CiEwDQYJKoZIhvcNAQEL
+BQAwLDEqMCgGA1UEAwwhaW1hZ2UtY2hlY2tlci13ZWJob29rLmRlZmF1bHQuc3Zj
+MB4XDTI2MDkwODE2NTE1OVoXDTI3MDkwODE2NTE1OVowLDEqMCgGA1UEAwwhaW1h
+Z2UtY2hlY2tlci13ZWJob29rLmRlZmF1bHQuc3ZjMIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA1l+3kZ+3Xktz4M2PzrXmIA2xL/1O6tVIf1aYRA/KFUV5
+8kBLW7J58EyTX9MulFL54fehZDz2HnI7qCpeGco4a/pnKHTkhfKzKMiVLn+9PUvw
+5asoVIbDIgfs01JnMyxZDW8Lvlre1YnwCDgQfH7u004XDLvfhVYl54TWin59L6f7
+ShryRi3aZQQiweiU+xSy32nVE1AAR793olaQmVoAtrjTqTVns2oefhS9BNBLOUdM
+2FZhtcwc6VelZsqHowVUQBonLAgd9KS7oprw3s7cBp5bxldbcn2ufIdjNfLlVu7P
+YmDkfE/ZezI/PiKn8WzQjphoaNDxNnQ2tBkDo1DgFwIDAQABo08wTTAsBgNVHREE
+JTAjgiFpbWFnZS1jaGVja2VyLXdlYmhvb2suZGVmYXVsdC5zdmMwHQYDVR0OBBYE
+FBAbA3I4wbWECkFDXJXruU3cAhrTMA0GCSqGSIb3DQEBCwUAA4IBAQCQoXsNhKso
+vzGxsj+aCNRPD6SsHer8pG9uRrlNfVfZVMVG8jGUB/LnDsyVjA9khUqPsDNpC13R
+/keoaBpCDGPopYQrRmrMKqa6ekgGzC7YkikJ+LK68GMjm18R3wuBg+0vThrLR9A1
+QkJYqGZwIypUJuJQA3X1LIs3J3zfK+AiSrXsYOG/k1oN6bBD6C4NphQ9GKIQ+VGo
+JQLEPF+ogwN1tFmXVGlVJR9Gp19KeKg8UgbRAxfATbpTGiSGsN+ym8oQGa5dLqZu
+J+tD1+dVDCtHs51V911tmkJb/I1Zf+pUptEjzQQqjiWa5BDhb54rDZAZ+8U3hoSP
+6KI4luk7eVNE
+-----END CERTIFICATE-----
+
+```
+
+### 5. Webhook Private Key (`webhook.key`)
+
+```key
+-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDWX7eRn7deS3Pg
+zY/OteYgDbEv/U7q1Uh/VphED8oVRXnyQEtbsnnwTJNf0y6UUvnh96FkPPYecjuo
+Kl4Zyjhr+mcodOSF8rMoyJUuf709S/DlqyhUhsMiB+zTUmczLFkNbwu+Wt7VifAI
+OBB8fu7TThcMu9+FViXnhNaKfn0vp/tKGvJGLdplBCLB6JT7FLLfadUTUABHv3ei
+VpCZWgC2uNOpNWezah5+FL0E0Es5R0zYVmG1zBzpV6VmyoejBVRAGicsCB30pLui
+mvDeztwGnlvGV1tyfa58h2M18uVW7s9iYOR8T9l7Mj8+IqfxbNCOmGho0PE2dDa0
+GQOjUOAXAgMBAAECggEALHJkCRloV3ClcfKs4lrsf7DXD/AhMKdQBLbbkyEC8S4a
+fpO+DCERDzWRSMjsW2xoyuUg3TuWe/GLVO6T3B0FXb3pLYYu62bKpqYP6Dgr8E2S
+gMvf7MaUJrYl8BqhswZ64EIp2SnWEcgrsEiPgoB+2+jQ9p7tVSPrb/km0kgvhHWa
+i8KmjFy7JYbl7zAms9FwSRhKtkRG4NVxVGUxIcyP1vBt2ipuxxoYzTm4RzRG4p0T
+djjCdPHTAFTKiEBJMKo23hWIFo8/ptICPZjp339DVlV8C1onqzN3lFh9bfY+lEym
+d5sXsDThACvdSg1V9jhAVq/dbGGV4VXflZJCSdeRgQKBgQDqNYmCuTyq1IO/xCwg
+kKIS72bqjfru5UqXXhbcIE4ZSqtKeQDJ3lOpU8f/xhICiee0SaiOZFmIWs+JNK/B
+ZKe0PNs+mI70ZwTCx3eCZNERBTniqOqOgIDm6FoCfYkRgDCuZbCsTBV3F6enfrhv
+qHDY4LnC5Zj+UJ4QoU6vMTHFZwKBgQDqUb0GqsxrSGsR3SQdho36jHL7IJgeBjWI
+SUAg3EO3IBWVpjcCos5DlzlEk0mWGe8eaTh56IpR5bpSXEDhNG3paIXbdiumYwPO
+DwCf+xANXjikzu7kNMXwp2SVbTWq8gmp1kzoUcC6xF0MJM0EcgObKAaCnbBVHO4F
+TU+R8Cox0QKBgQCm0QEjqfprFrjMYtanTz0RTZE5KW18sLZDQBH6McxOuV9tyOfl
+4MQoC/Oc2yBCzKTLRdeXrCQVOdEuQeeZUK8ecmYanKDdtW6vqVEW/+XlQJqtNXDz
+lNW7Ie3SbkWtwGdsICQJZJu5WpDgfSKy7P+Liezlw5EIOrWK1MntgJWZqwKBgBJ3
+gKs+2L93xKByyj7ddOETIpiyF+r92Eg2ZaxxT5DmIW1a3SkDBbiD+YpzBTCkOJkv
+97h74DLWJRoKlT5qcGMdzrbeGFCTqyAZRJZXJgu3qkUq3d70Xck6mA3CvqELVEGj
+VwpULxlJEoA7gkDgb3JR9DllDhmXHxch4ayBvgGRAoGBAIcWvTaLNUyojsILsqbE
+hH/zTyTY8W6zgIOTJZayluvJNjKczfMzcys6daIwK+mD1kukKp1RGhDYZYTtkZ1J
+zvgDIMUWJAxL0HJXiv/Q4doshA1LbYhrbab6PeRMCSD+u65Eg9UGlvi6C3lJNAUS
+xGR9HofSE2DTx3OM6bM2jJ2N
+-----END PRIVATE KEY-----
+
+```
+
+```
+
+```
