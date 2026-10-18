@@ -7,7 +7,26 @@
 **valueFrom:** Get env value from ConfigMap/Secret/Downward API/resources  
 **volumeMounts:** Where files appear inside container  
 **volumes:** Which source provides those files
+---
+# ENV + VOLUMES/VOLUMEMOUNTS COMBINED CHEATSHEET
 
+## TABLE OF CONTENTS
+
+- [Quick Reference](#quick-reference)
+- [1. Literal Env — `env + value`](#1-literal-env-env--value)
+- [2. ConfigMap Key to Env — `configMapKeyRef`](#2-configmap-key-to-env-env--valuefrom--configmapkeyref)
+- [3. Secret Key to Env — `secretKeyRef`](#3-secret-key-to-env-env--valuefrom--secretkeyref)
+- [4. Import All ConfigMap Keys — `envFrom + configMapRef`](#4-import-all-configmap-keys-envfrom--configmapref)
+- [5. Import All Secret Keys — `envFrom + secretRef`](#5-import-all-secret-keys-envfrom--secretref)
+- [6. Prefixed Imports — `envFrom + prefix`](#6-prefixed-imports-envfrom--prefix)
+- [7. Mixed Pattern — Env + EnvFrom + Volumes](#7-mixed-pattern-env--envfrom--volume-mounts)
+- [8. Downward API as Env — `fieldRef`](#8-downward-api-as-env-fieldref)
+- [9. Resource Values as Env — `resourceFieldRef`](#9-resource-values-as-env-resourcefieldref)
+- [10. Where Are Env Vars and Mounted Files Available?](#10-where-are-env-vars-and-mounted-files-available)
+- [Quick Comparison Table](#quick-comparison-table)
+- [Common Patterns](#common-patterns)
+- [CKA Exam Tips](#cka-exam-tips)
+- [Quick Copy-Paste Templates](#quick-copy-paste-templates)
 ---
 
 ## 1. LITERAL ENV (env + value)
