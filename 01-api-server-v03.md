@@ -27,6 +27,28 @@ SYMPTOMS (DIAGNOSTIC FLOW)
          k logs -n       SSH to node
          kube-system     journalctl -u kubelet
          kube-apiserver
+### Hermano, you need to fix the diagram below, it is not shown up right!
+                    kubectl broken?
+                         │
+                         ▼
+                k get pods -A
+              (error connecting?)
+                         │
+                    ┌────┴────┐
+                    │          │
+                    ▼          ▼
+                  Works      FAILS
+                    │          │
+                    ▼          ▼
+               Check API    API SERVER
+               server logs   DOWN!
+                    │          │
+                    ▼          ▼
+         k logs -n       SSH to node
+         kube-system     journalctl -u kubelet
+         kube-apiserver
+
+         
 STATIC POD FILES
 /etc/kubernetes/manifests/kube-apiserver.yaml - Main manifest
 /etc/kubernetes/kubeadm.conf - kubeadm config
