@@ -364,3 +364,59 @@ Before you even read logs, ATTEMPT tells you the severity and pattern of failure
 ✅ **DO** grep the manifest for the error keyword
 ✅ **DO** verify certificates exist in `/etc/kubernetes/pki/`
 ✅ **DO** verify with `crictl ps` after fixing (ATTEMPT should reset)
+
+
+
+## === Having talked to Hermano ===
+Perfect. **Last line gives the next misconfig directly**: wrong cert path.
+
+## Documented steps (short exam runbook)
+
+1. **Restart kubelet and check apiserver container exists**
+```bash
+systemctl restart kubelet
+crictl ps -a --name kube-apiserver
+```
+
+2. **If container is Exited, read its logs**
+```bash
+crictl logs $(crictl ps -a --name kube-apiserver -q | head -n1)
+```
+
+3. **Fix found errors in manifest**  
+You already fixed:
+```text
+--authorization-mode=Node,RBAC
+```
+
+4. **From your last line, fix cert path**
+Error says:
+```text
+open /etc/kubernetes/pki/apiserver-wrong.crt: no such file or directory
+```
+So edit:
+```bash
+vi /etc/kubernetes/manifests/kube-apiserver.yaml
+```
+Change:
+```text
+--tls-cert-file=/etc/kubernetes/pki/apiserver-wrong.crt
+```
+to:
+```text
+--tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+```
+
+5. **Apply by restart and recheck**
+```bash
+systemctl restart kubelet
+crictl ps -a --name kube-apiserver
+crictl logs $(crictl ps -a --name kube-apiserver -q | head -n1)
+```
+
+6. **Repeat until all 3 misconfigs are fixed**, then verify:
+```bash
+kubectl get nodes
+```
+
+That’s your exact troubleshooting loop: **restart kubelet → crictl ps -a → crictl logs → fix one flag/path → repeat**.
