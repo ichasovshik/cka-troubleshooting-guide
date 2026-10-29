@@ -8,26 +8,8 @@ The Kubernetes control plane component that manages all cluster state
 Runs as STATIC POD in /etc/kubernetes/manifests/kube-apiserver.yaml
 If it's down → kubectl broken, cluster is deaf
 SYMPTOMS (DIAGNOSTIC FLOW)
-                    kubectl broken?
-                         │
-                         ▼
-                k get pods -A
-              (error connecting?)
-                         │
-                    ┌────┴────┐
-                    │          │
-                    ▼          ▼
-                  Works      FAILS
-                    │          │
-                    ▼          ▼
-               Check API    API SERVER
-               server logs   DOWN!
-                    │          │
-                    ▼          ▼
-         k logs -n       SSH to node
-         kube-system     journalctl -u kubelet
-         kube-apiserver
-### Hermano, you need to fix the diagram below, it is not shown up right!
+
+
                     kubectl broken?
                          │
                          ▼
