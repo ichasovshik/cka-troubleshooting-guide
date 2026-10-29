@@ -2,6 +2,39 @@
 
 ## Quick Diagnosis Workflow
 
+### WHAT IS API SERVER?
+The Kubernetes control plane component that manages all cluster state
+
+Runs as STATIC POD in /etc/kubernetes/manifests/kube-apiserver.yaml
+If it's down → kubectl broken, cluster is deaf
+SYMPTOMS (DIAGNOSTIC FLOW)
+                    kubectl broken?
+                         │
+                         ▼
+                k get pods -A
+              (error connecting?)
+                         │
+                    ┌────┴────┐
+                    │          │
+                    ▼          ▼
+                  Works      FAILS
+                    │          │
+                    ▼          ▼
+               Check API    API SERVER
+               server logs   DOWN!
+                    │          │
+                    ▼          ▼
+         k logs -n       SSH to node
+         kube-system     journalctl -u kubelet
+         kube-apiserver
+STATIC POD FILES
+/etc/kubernetes/manifests/kube-apiserver.yaml - Main manifest
+/etc/kubernetes/kubeadm.conf - kubeadm config
+/etc/kubernetes/pki/ca.crt - CA cert
+/etc/kubernetes/pki/ca.key - CA key
+
+
+
 When the API server is down, follow these 4 commands in order:
 
 ### Step 1: Verify API Server is Down
