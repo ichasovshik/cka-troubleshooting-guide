@@ -288,3 +288,271 @@ kubectl get pods -A -o wide --field-selector spec.nodeName=node01
 
 Check both the local service and Kubernetes node readiness.
 Do not infer an exact recovery duration from snapshots taken far apart.
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════ Q.1 ═════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+node01 ~ ➜  systemctl status kubelet
+○ kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: inactive (dead) since Fri 2026-10-30 17:04:13 UTC; 12min ago
+       Docs: https://kubernetes.io/docs/
+    Process: 1918 ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_AR>
+   Main PID: 1918 (code=exited, status=0/SUCCESS)
+        CPU: 7.651s
+
+
+1. The strongest evidence
+Your service status says:
+
+Active: inactive (dead) since 17:04:13
+status=0/SUCCESS — the process exited successfully, rather than reporting a crash.
+enabled — configured to start at boot, but not currently running.
+This confirms a stopped service; it does not tell us who or what stopped it.
+
+
+
+node01 ~ ➜  systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: active (running) since Fri 2026-10-30 17:17:09 UTC; 3s ago
+       Docs: https://kubernetes.io/docs/
+   Main PID: 17647 (kubelet)
+      Tasks: 23 (limit: 75787)
+     Memory: 24.4M
+        CPU: 181ms
+     CGroup: /system.slice/kubelet.service
+             └─17647 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/k>
+			 
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.070559   17647 kubelet_node_status.go:123] "Node was previously registered" >
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.070625   17647 kubelet_node_status.go:77] "Successfully registered node" nod>
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.862561   17647 apiserver.go:52] "Watching apiserver"
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.872646   17647 desired_state_of_world_populator.go:154] "Finished populating>
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.877662   17647 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.877708   17647 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.877731   17647 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.877743   17647 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.877758   17647 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:17:10 node01 kubelet[17647]: I1030 17:17:10.877805   17647 reconciler_common.go:251] "operationExecutor.VerifyController>
+
+node01 ~ ➜  
+
+node01 ~ ➜  
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════ Q.2 ═════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+
+
+node01 ~ ✖ systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: activating (auto-restart) (Result: exit-code) since Fri 2026-10-30 17:20:05 UTC; 681ms ago
+       Docs: https://kubernetes.io/docs/
+    Process: 19235 ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_A>
+   Main PID: 19235 (code=exited, status=1/FAILURE)
+        CPU: 41ms
+
+node01 ~ ✖ 
+
+node01 ~ ✖ crictl ps -a
+CONTAINER           IMAGE               CREATED             STATE               NAME                 ATTEMPT             POD ID              POD                     NAMESPACE
+639e45e4cde05       01cdfa8dd262f       36 minutes ago      Running             kube-flannel         0                   cb762959d4e06       kube-flannel-ds-dl8w6   kube-flannel
+06c4aea6af92b       01cdfa8dd262f       36 minutes ago      Exited              install-cni          0                   cb762959d4e06       kube-flannel-ds-dl8w6   kube-flannel
+abbaee67e43e2       a55d1bad692b7       36 minutes ago      Exited              install-cni-plugin   0                   cb762959d4e06       kube-flannel-ds-dl8w6   kube-flannel
+a4adeb6019e15       32652ff1bbe6b       36 minutes ago      Running             kube-proxy           0                   53c14c9311dd8       kube-proxy-72cfq        kube-system
+
+node01 ~ ➜  crictl ps -a --name=install-cni 
+CONTAINER           IMAGE               CREATED             STATE               NAME                 ATTEMPT             POD ID              POD                     NAMESPACE
+06c4aea6af92b       01cdfa8dd262f       37 minutes ago      Exited              install-cni          0                   cb762959d4e06       kube-flannel-ds-dl8w6   kube-flannel
+abbaee67e43e2       a55d1bad692b7       37 minutes ago      Exited              install-cni-plugin   0                   cb762959d4e06       kube-flannel-ds-dl8w6   kube-flannel
+
+node01 ~ ➜  crictl ps -a --name=install-cni -q
+06c4aea6af92b95ae1b2a902ec767cff026592a0cd2519ca7d25e54e697494a5
+abbaee67e43e280d7f657717ee82b9ca301d5d3c43e5773a9474c575443346a4
+
+node01 ~ ➜  crictl logs 06c4aea6af92b95ae1b2a902ec767cff026592a0cd2519ca7d25e54e697494a5
+
+node01 ~ ➜  crictl logs abbaee67e43e280d7f657717ee82b9ca301d5d3c43e5773a9474c575443346a4
+
+node01 ~ ➜  journalctl -u kubelet
+t: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory"
+Oct 30 17:22:08 node01 kubelet[20524]: E1030 17:22:08.462775   20524 run.go:72] "command failed" err="failed to construct kubelet dependencies: unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory"
+Oct 30 17:22:18 node01 kubelet[20607]: E1030 17:22:18.712310   20607 run.go:72] "command failed" err="failed to construct kubelet dependencies: unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory"
+Oct 30 17:22:28 node01 kubelet[20690]: E1030 17:22:28.964418   20690 run.go:72] "command failed" err="failed to construct kubelet dependencies: unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory"
+
+        
+
+node01 ~ ✖ grep WRONG -rn /var/lib/kubelet/
+/var/lib/kubelet/config.yaml:9:    clientCAFile: /etc/kubernetes/pki/WRONG-CA-FILE.crt
+
+node01 ~ ➜  ls -l /etc/kubernetes/pki
+total 4
+-rw-r--r-- 1 root root 1107 Oct 30 16:43 ca.crt
+
+node01 ~ ➜  vi /var/lib/kubelet/config.yaml
+
+node01 ~ ➜  
+
+node01 ~ ➜  
+
+node01 ~ ➜  
+
+node01 ~ ➜  systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: active (running) since Fri 2026-10-30 17:25:02 UTC; 4s ago
+       Docs: https://kubernetes.io/docs/
+   Main PID: 22199 (kubelet)
+      Tasks: 22 (limit: 75787)
+     Memory: 24.0M
+        CPU: 177ms
+     CGroup: /system.slice/kubelet.service
+             └─22199 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/k>
+
+Oct 30 17:25:02 node01 kubelet[22199]: I1030 17:25:02.961219   22199 kubelet_node_status.go:123] "Node was previously registered" >
+Oct 30 17:25:02 node01 kubelet[22199]: I1030 17:25:02.961275   22199 kubelet_node_status.go:77] "Successfully registered node" nod>
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.738310   22199 apiserver.go:52] "Watching apiserver"
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.747084   22199 desired_state_of_world_populator.go:154] "Finished populating>
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.752081   22199 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.752109   22199 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.752131   22199 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.752155   22199 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.752214   22199 reconciler_common.go:251] "operationExecutor.VerifyController>
+Oct 30 17:25:03 node01 kubelet[22199]: I1030 17:25:03.752279   22199 reconciler_common.go:251] "operationExecutor.VerifyController>
+
+node01 ~ ➜  
+
+
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+//
+//				Output of the termianals T1
+//
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+
+
+controlplane ~ ➜  k get nodes
+NAME           STATUS     ROLES           AGE   VERSION
+controlplane   Ready      control-plane   36m   v1.35.0
+node01         NotReady   <none>          36m   v1.35.0
+
+controlplane ~ ➜  
+
+controlplane ~ ➜  k get nodes
+NAME           STATUS   ROLES           AGE   VERSION
+controlplane   Ready    control-plane   42m   v1.35.0
+node01         Ready    <none>          41m   v1.35.0
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════ Q.3 ═════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+node01 ~ ➜  systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: active (running) since Fri 2026-10-30 17:27:02 UTC; 17min ago
+       Docs: https://kubernetes.io/docs/
+   Main PID: 23168 (kubelet)
+      Tasks: 23 (limit: 75787)
+     Memory: 32.6M
+        CPU: 15.945s
+     CGroup: /system.slice/kubelet.service
+             └─23168 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --conf>
+
+Oct 30 17:44:55 node01 kubelet[23168]: E1030 17:44:55.760198   23168 reconstruct.go:188] "Failed to get Node status to reconstruct device paths" err>
+Oct 30 17:44:55 node01 kubelet[23168]: E1030 17:44:55.862533   23168 reconstruct.go:188] "Failed to get Node status to reconstruct device paths" err>
+
+
+node01 ~ ➜  grep 6553 -rn /etc/kubernetes/
+/etc/kubernetes/kubelet.conf:5:    server: https://controlplane:6553
+
+node01 ~ ➜  vi /etc/kubernetes/kubelet.conf
+
+node01 ~ ➜  systemctl restart kubelet
+
+node01 ~ ➜  systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: active (running) since Fri 2026-10-30 17:48:19 UTC; 12s ago
+       Docs: https://kubernetes.io/docs/
+   Main PID: 31985 (kubelet)
+      Tasks: 23 (limit: 75787)
+     Memory: 24.6M
+        CPU: 231ms
+     CGroup: /system.slice/kubelet.service
+             └─31985 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --conf>
+
+Oct 30 17:48:19 node01 kubelet[31985]: I1030 17:48:19.468030   31985 kubelet_node_status.go:123] "Node was previously registered" node="node01"
+Oct 30 17:48:19 node01 kubelet[31985]: I1030 17:48:19.468083   31985 kubelet_node_status.go:77] "Successfully registered node" node="node01"
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.256821   31985 apiserver.go:52] "Watching apiserver"
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.267920   31985 desired_state_of_world_populator.go:154] "Finished populating initial desired s>
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.273792   31985 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume sta>
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.273812   31985 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume sta>
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.273823   31985 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume sta>
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.273832   31985 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume sta>
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.273849   31985 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume sta>
+Oct 30 17:48:20 node01 kubelet[31985]: I1030 17:48:20.273947   31985 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume sta>
+
+node01 ~ ➜  ^C
+
+node01 ~ ✖ grep 6443 -rn /etc/kubernetes/
+/etc/kubernetes/kubelet.conf:5:    server: https://controlplane:6443
+
+node01 ~ ➜  
+
+
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+//
+//				Output of the termianals T1
+//
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+controlplane ~ ➜  k get nodes
+NAME           STATUS     ROLES           AGE   VERSION
+controlplane   Ready      control-plane   51m   v1.35.0
+node01         NotReady   <none>          50m   v1.35.0
+
+controlplane ~ ➜  k get nodes
+NAME           STATUS   ROLES           AGE   VERSION
+controlplane   Ready    control-plane   70m   v1.35.0
+node01         Ready    <none>          69m   v1.35.0
+
+controlplane ~ ➜  
+
+
+
+
