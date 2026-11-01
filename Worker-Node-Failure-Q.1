@@ -1,0 +1,155 @@
+Hermano, **Q.1 was a stopped kubelet—not a crashed kubelet.** Below is a reconstructed note; commands missing from your transcript are marked as inferred.
+
+# Practice Test — Worker Node Failure
+## Q.1 — kubelet stopped on node01
+
+**Task:** restore the broken cluster.
+
+### 1. Connect to the worker and check kubelet
+
+```bash
+ssh node01
+systemctl status kubelet --no-pager -l
+```
+
+Your captured output:
+
+```text
+Active: inactive (dead)
+Main PID: 2109 (code=exited, status=0/SUCCESS)
+```
+
+**Meaning:** kubelet is not running. `status=0/SUCCESS` means its previous process exited successfully—it does **not** mean the service is currently healthy.
+
+The output does not establish who stopped it.
+
+### 2. Start kubelet
+
+**Reconstructed command**, based on your statement that starting it solved the quiz:
+
+```bash
+systemctl start kubelet
+```
+
+Use `start` because the service is stopped. There is no need to edit configuration without evidence of a configuration problem.
+
+### 3. Verify the service
+
+**Suggested verification; not captured in your notes:**
+
+```bash
+systemctl is-active kubelet
+```
+
+Expected:
+
+```text
+active
+```
+
+### 4. Verify the node from the control-plane terminal
+
+Return from SSH:
+
+```bash
+exit
+```
+
+Then:
+
+```bash
+k get nodes
+```
+
+Your captured final output:
+
+```text
+NAME           STATUS   ROLES
+controlplane   Ready    control-plane
+node01         Ready    <none>
+```
+
+**Result:** you reported that starting kubelet solved the quiz, and your final cluster output shows both nodes Ready.
+
+### Keep the investigation focused
+
+The `k get nodes` error on **node01** does not diagnose kubelet’s state. `kubectl` uses its own client configuration; kubelet is a separate host service. Check cluster status from the working control-plane terminal.
+
+The earlier disk-map errors do not establish why kubelet stopped. Do not chase them when starting the service restores operation.
+
+**CKA rule: kubelet `inactive (dead)` → start it → verify service → verify node Ready.**
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════ Q.1 ═════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+   __ ______  ____  ________ __ __    ____  __  ______ 
+   / //_/ __ \/ __ \/ ____/ //_// /   / __ \/ / / / __ \
+  / ,< / / / / / / / __/ / ,<  / /   / / / / / / / / / /
+ / /| / /_/ / /_/ / /___/ /| |/ /___/ /_/ / /_/ / /_/ / 
+/_/ |_\____/_____/_____/_/ |_/_____/\____/\____/_____/  
+                                                        
+               All rights reserved                                                                                                                  
+
+controlplane ~ ➜  ssh node01
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 6.8.0-90-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+This system has been minimized by removing packages and content that are
+not required on a system that users do not log into.
+
+To restore this content, you can run the 'unminimize' command.
+
+node01 ~ ➜  k get nodes
+E1031 20:55:56.259752   20918 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:55:56.268889   20918 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:55:56.286056   20918 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:55:56.295652   20918 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:55:56.296567   20918 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+Error from server (NotFound): the server could not find the requested resource
+
+node01 ~ ✖ 
+
+node01 ~ ✖ systemctl status kubelet
+○ kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: inactive (dead) since Sat 2026-10-31 20:54:07 UTC; 2min 7s ago
+       Docs: https://kubernetes.io/docs/
+    Process: 2109 ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_AR>
+   Main PID: 2109 (code=exited, status=0/SUCCESS)  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< HERE 
+        CPU: 14.662s
+
+Oct 31 20:14:22 node01 kubelet[2109]: I1031 20:14:22.100829    2109 swap_util.go:58] "Running under a user namespace - tmpfs noswa>
+Oct 31 20:14:24 node01 kubelet[2109]: I1031 20:14:24.027714    2109 pod_startup_latency_tracker.go:108] "Observed pod startup dura>
+Oct 31 20:14:24 node01 kubelet[2109]: I1031 20:14:24.302828    2109 kubelet_node_status.go:427] "Fast updating node status as it j>
+Oct 31 20:19:20 node01 kubelet[2109]: E1031 20:19:20.998584    2109 info.go:104] Failed to get disk map: could not parse device nu>
+Oct 31 20:24:20 node01 kubelet[2109]: E1031 20:24:20.998117    2109 info.go:104] Failed to get disk map: could not parse device nu>
+Oct 31 20:29:20 node01 kubelet[2109]: E1031 20:29:20.999725    2109 info.go:104] Failed to get disk map: could not parse device nu>
+Oct 31 20:34:20 node01 kubelet[2109]: E1031 20:34:20.998939    2109 info.go:104] Failed to get disk map: could not parse device nu>
+Oct 31 20:39:20 node01 kubelet[2109]: E1031 20:39:20.998878    2109 info.go:104] Failed to get disk map: could not parse device nu>
+Oct 31 20:44:20 node01 kubelet[2109]: E1031 20:44:20.999423    2109 info.go:104] Failed to get disk map: could not parse device nu>
+Oct 31 20:49:20 node01 kubelet[2109]: E1031 20:49:20.999080    2109 info.go:104] Failed to get disk map: could not parse device nu>
+lines 1-20/20 (END)
+
+
+
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+//
+//				Output of the termianals T1
+//
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+
+controlplane ~ ➜  k get nodes
+NAME           STATUS   ROLES           AGE   VERSION
+controlplane   Ready    control-plane   43m   v1.35.0
+node01         Ready    <none>          42m   v1.35.0
+
+controlplane ~ ➜  
+
+
