@@ -1,0 +1,230 @@
+**Hermano, Q.2 is different from Q.1: kubelet tries to start but crashes because its client CA filename is wrong.**
+
+## Q.2 — Incorrect kubelet client CA path
+
+**Task:** restore the broken cluster.
+
+### 1. Check kubelet on node01
+
+```bash
+systemctl status kubelet --no-pager -l
+```
+
+Your captured evidence:
+
+```text
+Active: activating (auto-restart) (Result: exit-code)
+Main PID: 22795 (code=exited, status=1/FAILURE)
+```
+
+**Meaning:** kubelet fails during startup, and systemd repeatedly retries. Simply starting it again will not correct the cause.
+
+### 2. Read kubelet’s journal
+
+```bash
+journalctl -u kubelet -n 60 --no-pager -l
+```
+
+Your decisive error:
+
+```text
+unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt:
+open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory
+```
+
+**Conclusion:** investigate the configured certificate path—not Flannel’s container logs.
+
+### 3. Find the incorrect setting
+
+**Reconstructed investigation; not captured in your notes:**
+
+```bash
+grep -n -B3 -A3 'WRONG-CA-FILE' /var/lib/kubelet/config.yaml
+ls -l /etc/kubernetes/pki/ca.crt
+```
+
+The expected location is kubelet’s configuration:
+
+```yaml
+authentication:
+  x509:
+    clientCAFile: /etc/kubernetes/pki/WRONG-CA-FILE.crt
+```
+
+**Confirm the setting and that `ca.crt` exists before editing.** This CA lets kubelet verify client certificates presented to its HTTPS API.
+
+### 4. Correct the path and restart kubelet
+
+**Reconstructed repair; your supplied transcript ends before this step:**
+
+```bash
+vi /var/lib/kubelet/config.yaml
+```
+
+Change only:
+
+```diff
+-    clientCAFile: /etc/kubernetes/pki/WRONG-CA-FILE.crt
++    clientCAFile: /etc/kubernetes/pki/ca.crt
+```
+
+Save, then:
+
+```bash
+systemctl restart kubelet
+systemctl status kubelet --no-pager -l
+journalctl -u kubelet --since "2 minutes ago" --no-pager -l
+```
+
+**Expected:** kubelet remains `active (running)` and recent logs no longer report the wrong CA filename. If another error appears, investigate it next.
+
+### 5. Verify the node from controlplane
+
+```bash
+k get nodes
+```
+
+**Expected:** `node01` becomes `Ready`. Your Q.2 excerpt does not yet capture this final verification.
+
+### Wrong turns to avoid
+
+Flannel was Running, and its CNI configuration existed. The `Exited` init containers and empty logs did not establish a CNI failure. Kubelet is a **host service**, so its startup error was in **`journalctl -u kubelet`**.
+
+**CKA rule: kubelet repeatedly exits → read journal → find incorrect configuration → correct it → restart → verify node.**
+
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════ Q.2 ═════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+node01 ~ ➜  k get nodes
+E1031 20:59:10.625228   22669 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:59:10.626553   22669 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:59:10.627326   22669 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:59:10.637194   22669 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+E1031 20:59:10.638054   22669 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server could not find the requested resource"
+Error from server (NotFound): the server could not find the requested resource
+
+node01 ~ ✖ 
+
+node01 ~ ✖ systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: activating (auto-restart) (Result: exit-code) since Sat 2026-10-31 20:59:19 UTC; 6s ago
+       Docs: https://kubernetes.io/docs/
+    Process: 22795 ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_A>
+   Main PID: 22795 (code=exited, status=1/FAILURE)
+        CPU: 39ms
+
+node01 ~ ✖ crictl ps -a
+CONTAINER           IMAGE               CREATED             STATE               NAME                 ATTEMPT             POD ID              POD                     NAMESPACE
+e96cd02902a9e       01cdfa8dd262f       45 minutes ago      Running             kube-flannel         0                   10857df5a01a5       kube-flannel-ds-nnrzh   kube-flannel
+60d38082bc8f2       01cdfa8dd262f       45 minutes ago      Exited              install-cni          0                   10857df5a01a5       kube-flannel-ds-nnrzh   kube-flannel
+6303ea0cfc022       a55d1bad692b7       45 minutes ago      Exited              install-cni-plugin   0                   10857df5a01a5       kube-flannel-ds-nnrzh   kube-flannel
+7cd26d7f0de7c       32652ff1bbe6b       45 minutes ago      Running             kube-proxy           0                   db888f709a530       kube-proxy-9dchv        kube-system
+
+node01 ~ ➜  crictl ps -a --name=install-cni
+CONTAINER           IMAGE               CREATED             STATE               NAME                 ATTEMPT             POD ID              POD                     NAMESPACE
+60d38082bc8f2       01cdfa8dd262f       45 minutes ago      Exited              install-cni          0                   10857df5a01a5       kube-flannel-ds-nnrzh   kube-flannel
+6303ea0cfc022       a55d1bad692b7       45 minutes ago      Exited              install-cni-plugin   0                   10857df5a01a5       kube-flannel-ds-nnrzh   kube-flannel
+
+node01 ~ ➜  crictl ps -a --name=install-cni-plugin
+CONTAINER           IMAGE               CREATED             STATE               NAME                 ATTEMPT             POD ID              POD                     NAMESPACE
+6303ea0cfc022       a55d1bad692b7       46 minutes ago      Exited              install-cni-plugin   0                   10857df5a01a5       kube-flannel-ds-nnrzh   kube-flannel
+
+node01 ~ ➜  crictl ps -a --name=install-cni-plugin -q
+6303ea0cfc022ff9fef253e54d2dafdd25d58f7ac61b71c5b5e252947c0b850f
+
+node01 ~ ➜  crictl logs $(crictl ps -a --name=install-cni-plugin -q)
+
+node01 ~ ➜  crictl logs $(crictl ps -a --name=install-cni-plugin -q)
+
+node01 ~ ➜  crictl logs $(crictl ps -a --name=install-cni -q)
+NAME:
+   crictl logs - Fetch the logs of a container
+
+USAGE:
+   crictl logs [command options] CONTAINER-ID
+
+COMMANDS:
+   help, h  Shows a list of commands or help for one command
+
+OPTIONS:
+   --follow, -f              Follow log output (default: false)
+   --limit-bytes value       Maximum bytes of logs to return. Defaults to no limit (default: -1)
+   --previous, -p            Print the logs for the previous instance of the container in a pod if it exists (default: false)
+   --reopen, -r              Reopen the container logs for the provided container (default: false)
+   --since value             Show logs since timestamp (e.g. 2013-01-02T13:23:37) or relative (e.g. 42m for 42 minutes)
+   --stream value, -s value  Show specified stream (stdout or stderr). Defaults to both.
+   --tail value              Number of lines to show from the end of the logs. Defaults to all (default: -1)
+   --timestamps, -t          Show timestamps (default: false)
+   --help, -h                show help
+
+node01 ~ ➜  crictl ps -a --name=install-cni -q
+60d38082bc8f2caf43e49f00153a5f2fd27b7c180c91232147d0c7460c851945
+6303ea0cfc022ff9fef253e54d2dafdd25d58f7ac61b71c5b5e252947c0b850f
+
+node01 ~ ➜  
+
+node01 ~ ➜  crictl logs 60d38082bc8f2caf43e49f00153a5f2fd27b7c180c91232147d0c7460c851945
+
+node01 ~ ➜  crictl logs 6303ea0cfc022ff9fef253e54d2dafdd25d58f7ac61b71c5b5e252947c0b850f
+
+node01 ~ ➜  grep -irn error /var/log/container
+grep: /var/log/container: No such file or directory
+
+node01 ~ ✖ grep -irn error /var/log/container
+grep: /var/log/container: No such file or directory
+
+node01 ~ ✖ ls -l /var/log/container
+ls: cannot access '/var/log/container': No such file or directory
+
+node01 ~ ✖ ls -l /var/log/container
+containerd.log  containers/     
+
+node01 ~ ✖ ls -l /var/log/container
+containerd.log  containers/     
+
+node01 ~ ✖ ls -l /var/log/containers
+total 16
+lrwxrwxrwx 1 root root 103 Oct 31 20:14 kube-flannel-ds-nnrzh_kube-flannel_install-cni-60d38082bc8f2caf43e49f00153a5f2fd27b7c180c91232147d0c7460c851945.log -> /var/log/pods/kube-flannel_kube-flannel-ds-nnrzh_1ad73bfd-2bfc-473f-baab-8931d9589bd9/install-cni/0.log
+lrwxrwxrwx 1 root root 110 Oct 31 20:14 kube-flannel-ds-nnrzh_kube-flannel_install-cni-plugin-6303ea0cfc022ff9fef253e54d2dafdd25d58f7ac61b71c5b5e252947c0b850f.log -> /var/log/pods/kube-flannel_kube-flannel-ds-nnrzh_1ad73bfd-2bfc-473f-baab-8931d9589bd9/install-cni-plugin/0.log
+lrwxrwxrwx 1 root root 104 Oct 31 20:14 kube-flannel-ds-nnrzh_kube-flannel_kube-flannel-e96cd02902a9e1f2a38c09e703cdbbf2c174fb238052397b9b7687acd50321c2.log -> /var/log/pods/kube-flannel_kube-flannel-ds-nnrzh_1ad73bfd-2bfc-473f-baab-8931d9589bd9/kube-flannel/0.log
+lrwxrwxrwx 1 root root  96 Oct 31 20:14 kube-proxy-9dchv_kube-system_kube-proxy-7cd26d7f0de7c9eab1c14a9324d8c3a9c95855b08580a21224f4bcb648d86d83.log -> /var/log/pods/kube-system_kube-proxy-9dchv_9a82fc9b-5d4a-4a0e-9def-76147f935dea/kube-proxy/0.log
+
+node01 ~ ➜  grep -irn error /var/log/containers
+
+node01 ~ ✖ grep -irn error /var/log/pods
+
+node01 ~ ✖ grep -irn failed /var/log/pods
+
+node01 ~ ✖ grep -irn failed /var/log/containers
+
+node01 ~ ✖ grep -irn error /etc/kubernetes/
+
+node01 ~ ✖ grep -irn manifest /etc/kubernetes/
+
+node01 ~ ✖ ls -l /etc/cni/net.d/
+total 4
+-rw-r--r-- 1 root root 292 Oct 31 20:14 10-flannel.conflist
+
+
+
+node01 ~ ➜  journalctl -u kubelet -n 60 --no-pager -l | cat | grep "]: E"
+
+ct 31 21:08:32 node01 kubelet[28125]: E1031 21:08:32.779267   28125 run.go:72] "command failed" err="failed to construct kubelet dependencies: unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory"
+Oct 31 21:08:43 node01 kubelet[28235]: E1031 21:08:43.031021   28235 run.go:72] "command failed" err="failed to construct kubelet dependencies: unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory"
+Oct 31 21:08:53 node01 kubelet[28321]: E1031 21:08:53.281692   28321 run.go:72] "command failed" err="failed to construct kubelet dependencies: unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory"  <<<<<<<<<<<<<< ====
+
+
+
+
+
+
+
+
+
+
