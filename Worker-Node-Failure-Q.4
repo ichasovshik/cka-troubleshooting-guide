@@ -1,0 +1,187 @@
+**Hermano, Q.4 is fully captured: kubelet used the wrong API-server port. Correcting `6553` to `6443` restored node01.**
+
+## Q.4 — Wrong API-server port in kubelet kubeconfig
+
+**Task:** restore the broken cluster.
+
+### 1. Read kubelet’s journal on node01
+
+Use a focused, non-interactive command:
+
+```bash
+journalctl -u kubelet -n 60 --no-pager -l
+```
+
+Your decisive evidence:
+
+```text
+https://controlplane:6553/...
+dial tcp 10.244.243.243:6553: connect: connection refused
+```
+
+**Meaning:** kubelet tried to contact the API server on port **6553**, but the connection was refused.
+
+The embedded `InvalidDiskCapacity` warning was not the cause of this connection failure. Focus first on the refused API connection.
+
+### 2. Locate the incorrect endpoint
+
+You ran:
+
+```bash
+grep -rn '6553' /etc/kubernetes/
+```
+
+Result:
+
+```text
+/etc/kubernetes/kubelet.conf:5: server: https://controlplane:6553
+```
+
+**Conclusion:** the incorrect port is in kubelet’s **kubeconfig**, which tells it how to connect to the API server.
+
+For this lab, the correct port is **6443**. It is Kubernetes’ default API-server port, but custom clusters can use another port.
+
+### 3. Correct only the port
+
+```bash
+vi /etc/kubernetes/kubelet.conf
+```
+
+Your before-and-after output establishes this change:
+
+```diff
+- server: https://controlplane:6553
++ server: https://controlplane:6443
+```
+
+Save, then confirm:
+
+```bash
+grep -n 'server:' /etc/kubernetes/kubelet.conf
+```
+
+### 4. Restart kubelet and verify
+
+You ran:
+
+```bash
+systemctl restart kubelet
+systemctl status kubelet --no-pager -l
+```
+
+Your captured recovery evidence:
+
+```text
+Active: active (running)
+"Successfully registered node" node="node01"
+```
+
+**Conclusion:** kubelet is running and can communicate with the API server again.
+
+### 5. Verify from controlplane
+
+```bash
+k get nodes
+```
+
+Your first check showed `node01 NotReady`; the next showed:
+
+```text
+NAME           STATUS
+controlplane   Ready
+node01         Ready
+```
+
+**Result: recovery confirmed.** Node readiness can take a short time to update after restarting kubelet.
+
+### Keep the two configuration files distinct
+
+| File | Purpose |
+|---|---|
+| `/var/lib/kubelet/config.yaml` | Kubelet behavior settings, including Q.2’s client CA path |
+| `/etc/kubernetes/kubelet.conf` | API-server endpoint and credentials, including Q.4’s port |
+
+**CKA rule: connection refused → check API endpoint → correct host/port → restart kubelet → verify node Ready.**
+
+
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════ Q.4 ═════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+node01 ~ ➜  journalctl -u kubelet | cat | grep "]: E"
+
+Oct 31 21:15:42 node01 kubelet[30618]: E1031 21:15:42.339321   30618 event.go:368] "Unable to write event (may retry after sleeping)" err="Post \"https://controlplane:6553/api/v1/namespaces/default/events\": dial tcp 10.244.243.243:6553: connect: connection refused" event="&Event{ObjectMeta:{node01.18e3b9a0d1a35cd0  default    0 0001-01-01 00:00:00 +0000 UTC <nil> <nil> map[] map[] [] [] []},InvolvedObject:ObjectReference{Kind:Node,Namespace:,Name:node01,UID:,APIVersion:v1,ResourceVersion:,FieldPath:,},Reason:InvalidDiskCapacity,Message:invalid capacity 0 on image filesystem,Source:EventSource{Component:kubelet,Host:node01,},FirstTimestamp:2026-10-31 21:12:56.986639568 +0000 UTC m=+0.113199175,LastTimestamp:2026-10-31 21:12:56.986639568 +0000 UTC m=+0.113199175,Count:1,Type:Warning,EventTime:0001-01-01 00:00:00 +0000 UTC,Series:nil,Action:,Related:nil,ReportingController:kubelet,ReportingInstance:node01,}"
+
+node01 ~ ➜  journalctl -u kubelet | cat | grep "]: E"^C
+
+node01 ~ ✖ grep 6553 -rn /etc/kubernetes/
+/etc/kubernetes/kubelet.conf:5:    server: https://controlplane:6553
+
+node01 ~ ➜  vi /etc/kubernetes/kubelet.conf
+
+node01 ~ ➜  
+
+node01 ~ ➜  
+
+node01 ~ ➜  grep 6553 -rn /etc/kubernetes/
+
+node01 ~ ✖ grep 6443 -rn /etc/kubernetes/
+/etc/kubernetes/kubelet.conf:5:    server: https://controlplane:6443
+
+node01 ~ ➜  systemctl restart kubelet
+
+node01 ~ ➜  systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+     Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+    Drop-In: /usr/lib/systemd/system/kubelet.service.d
+             └─10-kubeadm.conf
+     Active: active (running) since Sat 2026-10-31 21:18:32 UTC; 10s ago
+       Docs: https://kubernetes.io/docs/
+   Main PID: 33222 (kubelet)
+      Tasks: 23 (limit: 75883)
+     Memory: 24.9M
+        CPU: 216ms
+     CGroup: /system.slice/kubelet.service
+             └─33222 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config>
+
+Oct 31 21:18:32 node01 kubelet[33222]: I1031 21:18:32.849271   33222 kubelet_node_status.go:123] "Node was previously registered" node="node01"
+Oct 31 21:18:32 node01 kubelet[33222]: I1031 21:18:32.849380   33222 kubelet_node_status.go:77] "Successfully registered node" node="node01"
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.613047   33222 apiserver.go:52] "Watching apiserver"
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.621610   33222 desired_state_of_world_populator.go:154] "Finished populating initial desired state of world"
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.627851   33222 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume started for volume \"xtables->
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.627879   33222 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume started for volume \"lib-modu>
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.627914   33222 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume started for volume \"run\" (U>
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.627927   33222 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume started for volume \"cni-plug>
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.627941   33222 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume started for volume \"cni\" (U>
+Oct 31 21:18:33 node01 kubelet[33222]: I1031 21:18:33.627959   33222 reconciler_common.go:251] "operationExecutor.VerifyControllerAttachedVolume started for volume \"xtables->
+
+node01 ~ ➜  
+
+
+
+
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+//
+//				Output of the termianals T1
+//
+////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\///////////////////////////////\\\\\\\\\\\\\\\\
+
+controlplane ~ ➜  k get nodes
+NAME           STATUS     ROLES           AGE   VERSION
+controlplane   Ready      control-plane   64m   v1.35.0
+node01         NotReady   <none>          63m   v1.35.0
+
+controlplane ~ ➜  k get nodes
+NAME           STATUS   ROLES           AGE   VERSION
+controlplane   Ready    control-plane   65m   v1.35.0
+node01         Ready    <none>          64m   v1.35.0
+
+controlplane ~ ➜  
+
+
+
+
+
+
